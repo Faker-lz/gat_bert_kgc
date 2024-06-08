@@ -13,7 +13,7 @@ def main():
         r'E:\study\now\研究生\学习笔记\ML\Graph attention network\data\WN18RR\valid_graph_parts_3',
         3,
         768,
-        16,
+        32,
         0.2,
         0.2,
         3,
