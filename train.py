@@ -14,11 +14,12 @@ from utils import move_to_cuda, save_checkpoint, delete_old_ckt
 
 
 class KnowledgeGraphTrainer:
-    def __init__(self, all_file_path, train_file_path, valid_file_path, layers, entity_dim, relation_dim, dropout, 
-                 alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cpu'):
+    def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, relation_dim, dropout, 
+                 alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
         self.all_file_path = all_file_path
         self.train_file_path = train_file_path
         self.valid_file_path = valid_file_path
+        self.model_dir = model_dir
         self.layers = layers
         self.entity_dim = entity_dim
         self.relation_dim = relation_dim
@@ -49,7 +50,7 @@ class KnowledgeGraphTrainer:
         self.relation_embeddings = nn.Embedding(self.n_relations, relation_dim).to(device)
         nn.init.xavier_uniform_(self.relation_embeddings.weight)
 
-        self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim)
+        self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim).to(device)
         
     def train_epoch(self):
         self.model.train()
@@ -90,13 +91,13 @@ class KnowledgeGraphTrainer:
 
                 loss = self.criterion(logits, target)
                 acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
-                print(f'Epoch: {epoch + 1} \t Batch: {batch_index} \t Hit@1: {acc1} \t Hit@3:{acc3} \t Hit@10:{acc10}')
+                print(f'Epoch: {epoch + 1} | Batch: {batch_index} | Loss:{round(loss.item(), 3)} | Hit@1: {round(acc1.item(), 3)} | Hit@3:{round(acc3.item(), 3)} | Hit@10:{round(acc10.item(), 3)}')
 
                 loss.backward()
                 self.optimizer.step()
 
                 total_loss += loss.item()
-            print(f'Epoch {epoch+1}, Loss: {total_loss/len(self.dataloader)}')
+            print(f'Epoch {epoch+1}, Loss: {total_loss/len(self.train_dataloader)}')
             self.evaluate_save_model(epoch)
 
     @torch.no_grad()
@@ -105,30 +106,38 @@ class KnowledgeGraphTrainer:
         acc1s = 0
         acc3s = 0
         acc10s = 0
-        for _, (edge_index, triples) in enumerate(self.valid_dataloader):
+        for _, (adj_matrix, triples) in enumerate(self.train_dataloader):
             if self.device == 'cuda':
-                move_to_cuda(edge_index)
+                move_to_cuda(adj_matrix)
                 move_to_cuda(triples)
+            
+            adj_matrix = adj_matrix.squeeze().to(self.device)
             head, relation, tail = zip(*triples)
-            head = torch.tensor(head, dtype=torch.long)
-            relation = torch.tensor(relation, dtype=torch.long)
-            tail = torch.tensor(tail, dtype=torch.long)
+            head = torch.tensor(head, dtype=torch.long).to(self.device)
+            relation = torch.tensor(relation, dtype=torch.long).to(self.device)
+            tail = torch.tensor(tail, dtype=torch.long).to(self.device)
             triples_number = head.shape[0]
 
-            self.optimizer.zero_grad()
-
-            x = self.entity_embeddings.weight
-            output = self.model(x, self.adj_matrix)
+            # 获取唯一节点并映射回原始节点索引
+            unique_entities, inverse_indices = torch.unique(torch.cat([head, tail]), return_inverse=True)
+            x = self.entity_embeddings(unique_entities).to(self.device)
             
-            head_emb = output[head]
-            relation_emb = self.relation_embeddings.weight[relation]
-            tail_emb = output[tail]
+            # 构建子图的邻接矩阵
+            sub_adj_matrix = adj_matrix[unique_entities][:, unique_entities]
 
-            hr = torch.cat([head_emb, relation_emb], dim=1)
+            output = self.model(x, sub_adj_matrix)
+            
+            head_emb = output[inverse_indices[:len(head)]]
+            relation_emb = self.relation_embeddings(relation)
+            tail_emb = output[inverse_indices[len(head):]]
 
-            logits = hr @ tail_emb
+            hr = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
+
+            hr = nn.functional.normalize(hr, dim=1)
+            tail_emb = nn.functional.normalize(tail_emb, dim=1)
+
+            logits = hr @ tail_emb.T
             target = torch.arange(triples_number).to(self.device)
-
             loss = self.criterion(logits, target)
             acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
 
@@ -148,14 +157,14 @@ class KnowledgeGraphTrainer:
     
     def evaluate_save_model(self, epoch):
         metrics = self.evaluate_epoch(epoch)
-        is_best = self.valid_loader and (self.best_metrics is None or metrics['Hit@1'] > self.best_metrics['Hit@1'])
+        is_best = self.valid_dataloader and (self.best_metrics is None or metrics['Hit@1'] > self.best_metrics['Hit@1'])
         if is_best:
             self.best_metrics = metrics
-        filename = '{}/checkpoint_epoch{}.mdl'.format(self.args.model_dir, epoch)
+        filename = '{}/checkpoint_epoch{}.mdl'.format(self.model_dir, epoch)
         save_checkpoint({
             'epoch': epoch,
-            'args': self.args.__dict__,
+            # 'args': self.args.__dict__,
             'state_dict': self.model.state_dict(),
         }, is_best=is_best, filename=filename)
-        delete_old_ckt(path_pattern='{}/checkpoint_*.mdl'.format(self.args.model_dir),
-                       keep=self.args.max_to_keep)
+        delete_old_ckt(path_pattern='{}/checkpoint_*.mdl'.format(self.model_dir),
+                       keep=1)

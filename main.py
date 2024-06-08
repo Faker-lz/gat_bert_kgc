@@ -8,9 +8,10 @@ from train import KnowledgeGraphTrainer
 
 def main():
     trainer = KnowledgeGraphTrainer(
-        r'E:\study\now\研究生\学习笔记\ML\Graph attention network\data\WN18RR\all.txt',
-        r'E:\study\now\研究生\学习笔记\ML\Graph attention network\data\WN18RR\train_graph_parts_50',
-        r'E:\study\now\研究生\学习笔记\ML\Graph attention network\data\WN18RR\valid_graph_parts_3',
+        r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/all.txt',
+        r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/train_graph_parts_20',
+        r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/valid_graph_parts_3',
+        r'/root/project/wlz/dl/gat_bert_kgc/checkpoint',
         3,
         768,
         32,

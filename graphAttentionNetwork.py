@@ -82,13 +82,13 @@ class MultiHeadGAT(nn.Module):
                                              dropout=dropout, alpha=alpha, concat=False)
     
     def forward(self, x, adj):
-        x = F.dropout(x, self.dropout, training=self.training)
+        # x = F.dropout(x, self.dropout, training=self.training)
         # 多头注意力特征拼接
         x = torch.cat([attention(x, adj) for attention in self.attentions] ,dim=1)
-        x = F.dropout(x, self.dropout, training=self.training)
+        # x = F.dropout(x, self.dropout, training=self.training)
         x = self.out_layer(x, adj)
         # 分类任务需要注释掉
-        x = F.dropout(x, self.dropout, training=self.training)
+        # x = F.dropout(x, self.dropout, training=self.training)
         # # 节点分类任务损失
         # x = F.log_softmax(F.elu(x), dim=1)
         return x
@@ -119,7 +119,6 @@ class MultiLayerGAT(nn.Module):
     def forward(self, x, adj):
         for gat in self.gats:
             x = gat(x, adj)
-            x = F.dropout(x, self.dropout, training=self.training)
         x = self.out_layer(x, adj)
         return x
 
