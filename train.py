@@ -9,13 +9,13 @@ from torch import optim
 from metric import compute_accuracy
 from logger_config import logger
 from torch.utils.data import DataLoader
-from graphAttentionNetwork import MultiLayerGAT
+from knowledgeGraphGAT import KnowledgeGraphGAT
 from dataset import KnowledgeGraphDataset, load_data
 from utils import move_to_cuda, save_checkpoint, delete_old_ckt
 
 
 class KnowledgeGraphTrainer:
-    def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, relation_dim, dropout, 
+    def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, hid_dim,relation_dim, dropout, 
                  temperature, alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
         self.all_file_path = all_file_path
         self.train_file_path = train_file_path
@@ -23,6 +23,7 @@ class KnowledgeGraphTrainer:
         self.model_dir = model_dir
         self.layers = layers
         self.entity_dim = entity_dim
+        self.hid_dim = hid_dim
         self.relation_dim = relation_dim
         self.dropout = dropout
         self.alpha = alpha
@@ -38,22 +39,15 @@ class KnowledgeGraphTrainer:
         self.valid_dataset = KnowledgeGraphDataset(valid_file_path, self.all_entity2id, self.all_relation2id)
         self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True)
         self.valid_dataloader = DataLoader(self.valid_dataset, batch_size=batch_size, shuffle=True)
-        
-        self.log_inv_t = nn.Parameter(torch.tensor(1.0 / temperature).log())
-        
+                
         self.n_entities = len(self.all_entity2id)
         self.n_relations = len(self.all_relation2id)
         
-        self.model = MultiLayerGAT(layers, entity_dim, entity_dim, entity_dim, dropout, alpha, nheads).to(device)
+        self.model = KnowledgeGraphGAT(layers, self.n_entities,self.n_relations, entity_dim, relation_dim, 
+                                       hid_dim, entity_dim, dropout, alpha, temperature, nheads).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.criterion = nn.CrossEntropyLoss().to(device)
-        
-        self.entity_embeddings = nn.Embedding(self.n_entities, entity_dim).to(device)
-        nn.init.xavier_uniform_(self.entity_embeddings.weight)
-        self.relation_embeddings = nn.Embedding(self.n_relations, relation_dim).to(device)
-        nn.init.xavier_uniform_(self.relation_embeddings.weight)
 
-        self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim).to(device)
         
     def train_epoch(self):
         self.model.train()
@@ -66,40 +60,11 @@ class KnowledgeGraphTrainer:
                 
                 adj_matrix = adj_matrix.squeeze().to(self.device)
                 head, relation, tail = zip(*triples)
-                head = torch.tensor(head, dtype=torch.long).to(self.device)
-                relation = torch.tensor(relation, dtype=torch.long).to(self.device)
-                tail = torch.tensor(tail, dtype=torch.long).to(self.device)
-                triples_number = head.shape[0]
-
-                # 获取唯一节点并映射回原始节点索引
-                unique_entities, inverse_indices = torch.unique(torch.cat([head, tail]), return_inverse=True)
-                x = self.entity_embeddings(unique_entities).to(self.device)
-                
-                # 构建子图的邻接矩阵
-                sub_adj_matrix = adj_matrix[unique_entities][:, unique_entities]
-
-                output = self.model(x, sub_adj_matrix)
-                
-                head_emb = output[inverse_indices[:len(head)]]
-                relation_emb = self.relation_embeddings(relation)
-                tail_emb = output[inverse_indices[len(head):]]
-
-                hr = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
-
-                hr = nn.functional.normalize(hr, dim=1)
-                tail_emb = nn.functional.normalize(tail_emb, dim=1)
-
-                logits = hr @ tail_emb.T
-
-                logits *= self.log_inv_t.exp()
-
-                # logits = torch.softmax(logits, dim=1)
-
-                target = torch.arange(triples_number).to(self.device)
+                logits, target = self.model(head, relation, tail, adj_matrix)
 
                 loss = self.criterion(logits, target)
                 acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
-                logger.info(f'Epoch: {epoch + 1} | Batch: {batch_index} | Inv: {self.log_inv_t.detach().exp()} |Loss:{round(loss.item(), 3)} | Hit@1: {round(acc1.item(), 3)} | Hit@3: {round(acc3.item(), 3)} | Hit@10: {round(acc10.item(), 3)}')
+                logger.info(f'Epoch: {epoch + 1} | Batch: {batch_index} | Loss:{round(loss.item(), 3)} | Hit@1: {round(acc1.item(), 3)} | Hit@3: {round(acc3.item(), 3)} | Hit@10: {round(acc10.item(), 3)}')
 
                 loss.backward()
                 self.optimizer.step()
@@ -111,6 +76,7 @@ class KnowledgeGraphTrainer:
 
     @torch.no_grad()
     def evaluate_epoch(self, epoch):
+        self.model.eval()
         total_loss = 0
         acc1s = 0
         acc3s = 0
@@ -122,31 +88,8 @@ class KnowledgeGraphTrainer:
             
             adj_matrix = adj_matrix.squeeze().to(self.device)
             head, relation, tail = zip(*triples)
-            head = torch.tensor(head, dtype=torch.long).to(self.device)
-            relation = torch.tensor(relation, dtype=torch.long).to(self.device)
-            tail = torch.tensor(tail, dtype=torch.long).to(self.device)
-            triples_number = head.shape[0]
-
-            # 获取唯一节点并映射回原始节点索引
-            unique_entities, inverse_indices = torch.unique(torch.cat([head, tail]), return_inverse=True)
-            x = self.entity_embeddings(unique_entities).to(self.device)
+            logits, target = self.model(head, relation, tail, adj_matrix)
             
-            # 构建子图的邻接矩阵
-            sub_adj_matrix = adj_matrix[unique_entities][:, unique_entities]
-
-            output = self.model(x, sub_adj_matrix)
-            
-            head_emb = output[inverse_indices[:len(head)]]
-            relation_emb = self.relation_embeddings(relation)
-            tail_emb = output[inverse_indices[len(head):]]
-
-            hr = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
-
-            hr = nn.functional.normalize(hr, dim=1)
-            tail_emb = nn.functional.normalize(tail_emb, dim=1)
-
-            logits = hr @ tail_emb.T
-            target = torch.arange(triples_number).to(self.device)
             loss = self.criterion(logits, target)
             acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
 

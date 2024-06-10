@@ -25,6 +25,24 @@ class KnowledgeGraphDataset(Dataset):
         adj_matrix = build_adjacency_matrix(triples, self.entity2id, True)
         return adj_matrix, triples
 
+class KnowledgeGtaphTestDataset(Dataset):
+    def __init__(self, test_data_path, entity2id, relation2id) -> None:
+        super().__init__()
+        self.triples = load_data(test_data_path)
+        self.entity2id = entity2id
+        self.relation2id = relation2id
+    
+    def __len__(self):
+        return len(self.triples)
+    
+    def __getitem__(self, index):
+        return self.triples[index]
+
+    def get_triples_and_adj(self):
+        adj_matrix = build_adjacency_matrix(self.triples, self.entity2id, True)
+        return self.triples, adj_matrix
+
+
 def load_data(filepath, load_all=False, entity2id=None, relation2id=None):
     entity_set = set()
     relation_set = set()

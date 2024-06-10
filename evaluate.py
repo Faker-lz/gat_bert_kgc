@@ -5,6 +5,9 @@ from typing import List
 from dataset import load_data
 from logger_config import logger
 from dataclasses import dataclass, asdict
+from dataset import KnowledgeGtaphTestDataset
+from knowledgeGraphGAT import KnowledgeGraphGAT
+
 
 _, entity2id, relation2id = load_data()
 
@@ -58,12 +61,27 @@ def compute_metrics(hr_tensor: torch.tensor,
     assert len(topk_scores) == total
     return topk_scores, topk_indices, metrics, ranks
 
-def predict(all_triple_path, test_triple_path, model_path):
+@torch.no_grad()
+def predict(all_triple_path, test_triple_path, model_path, device):
     # 完成数据导入
     _, all_entity2id, all_relation2id = load_data(all_triple_path, True)
-    model = load_model(model_path)
+    model = KnowledgeGraphGAT(3, len(all_entity2id), len(all_relation2id), 768, 32, 128, 768, 0.2, 0.2, 0.05, 3)
 
+    train_args = torch.load(model_path, map_location=lambda storage, loc: storage)
+    model_args = train_args['state_dict']
+    model.load_state_dict(model_args)
+    model.to(device)
+    model.eval()
     # 运用gat和局部矩阵，获取全部head_emb
+    test_dataset = KnowledgeGtaphTestDataset(test_triple_path)
+
+    triples, adj = test_dataset.get_triples_and_adj()
+
+    head_id, relation_id, tail_id = triples
+
+    hr_emb, _ = model.compute_embedding(head_id, relation_id, tail_id)
+
+    # 分批次用邻居节点计算tail的embedding
 
     # 将head_emb和关系融合
 

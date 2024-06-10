@@ -14,6 +14,7 @@ def main():
         r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/valid_graph_parts_3',
         r'/root/project/wlz/dl/gat_bert_kgc/checkpoint',
         3,
+        768,
         128,
         32,
         0.2,

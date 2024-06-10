@@ -9,40 +9,55 @@ from graphAttentionNetwork import MultiLayerGAT
 import torch.nn.functional as F
 
 class KnowledgeGraphGAT(nn.Module):
-    def __init__(self, n_entities, n_relations, entity_dim, relation_dim, dropout, alpha, nheads,device='cuda'):
+    def __init__(self, n_layers, n_entities, n_relations, entity_dim, relation_dim, hid_dim, out_dim, dropout, alpha, temperature, nheads,device='cuda'):
         super(KnowledgeGraphGAT, self).__init__()
         self.entity_dim = entity_dim
         self.relation_dim = relation_dim
         self.n_entities = n_entities
         self.n_relations = n_relations
+        self.n_layers = n_layers
         self.device = device
+        self.log_inv_t = nn.Parameter(torch.tensor(1.0 / temperature).log())
+
         
         self.entity_embeddings = nn.Embedding(n_entities, entity_dim).to(device)
         self.relation_embeddings = nn.Embedding(n_relations, relation_dim).to(device)
         
-        self.gat = MultiLayerGAT(nlayer=10, nfeat=entity_dim, nhid=entity_dim, 
-                                 noutfeat=entity_dim, dropout=dropout, alpha=alpha, nheads=nheads).to(device)
+        self.gat = MultiLayerGAT(nlayer=n_layers, nfeat=entity_dim, nhid=hid_dim, 
+                                 noutfeat=out_dim, dropout=dropout, alpha=alpha, nheads=nheads).to(device)
         
-    def forward(self, head, relation, adj):
-        head = head.to(self.device)
-        relation = relation.to(self.device)
-        adj = adj.to(self.device)
+        self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim).to(device)
+        
+    def forward(self, head_id, relation_id, tail_id, adj):
+        hr_emb, tail_emb = self.compute_embedding(head_id, relation_id, tail_id)
+        triples_number = hr_emb.shape[0]
 
-        head_emb = self.entity_embeddings(head)  # 头实体嵌入
-        relation_emb = self.relation_embeddings(relation)  # 关系嵌入
-        
-        x = self.entity_embeddings.weight.to(self.device)  # 获取所有实体嵌入作为GAT输入
-        x = self.gat(x, adj)  # GAT输出更新后的实体嵌入
-        
-        head_relation_combined = head_emb + relation_emb  # 头实体和关系嵌入融合（可以用其他方式如拼接）
-        
-        return x, head_relation_combined
+        logits = hr_emb @ tail_emb.T
+        logits *= self.log_inv_t.exp()
+        target = torch.arange(triples_number).to(self.device)
+        return logits, target
 
-    def compute_similarity(self, head_relation_combined, tail):
-        tail = tail.to(self.device)
-        tail_emb = self.entity_embeddings(tail)  # 尾实体嵌入
-        similarity = F.cosine_similarity(head_relation_combined, tail_emb)  # 计算相似度（这里使用余弦相似度）
-        return similarity
+    def compute_embedding(self, head_id, relation_id, tail_id):
+        head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)
+        relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
+        tail_id = torch.tensor(tail_id, dtype=torch.long).to(self.device)
+
+        unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
+        x = self.entity_embeddings(unique_entities).to(self.device)
+        
+        sub_adj_matrix = adj[unique_entities][:, unique_entities]
+
+        output = self.gat(x, sub_adj_matrix)
+        
+        head_emb = output[inverse_indices[:len(head_id)]]
+        relation_emb = self.relation_embeddings(relation_id)
+        tail_emb = output[inverse_indices[len(head_id):]]
+
+        hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
+
+        hr_emb = nn.functional.normalize(hr_emb, dim=1)
+        tail_emb = nn.functional.normalize(tail_emb, dim=1)
+        return hr_emb, tail_emb
 
 if __name__ == '__main__':
     n_entities = 1000       # 假设有1000个实体
