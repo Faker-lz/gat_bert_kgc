@@ -32,6 +32,7 @@ class GraphAttentionLayer(nn.Module):
         # N * O
         h = torch.mm(features, self.W)
 
+        # Matrix compute but ineffective
         # N * F -> (N * N) * F
         # h_1 = h.repeat(1, N).view(N * N, -1)
         # h_2 = h.repeat(N, 1)
@@ -41,12 +42,18 @@ class GraphAttentionLayer(nn.Module):
         
         # N * N * (2 * O) @ (2 * O) * 1 -> N * N
         # e = self.LeakReLU(torch.matmul(h_cat, self.a).squeeze())
-
+    
         e = self.effective_compute_e(h)
 
-        inf_matrix = -9e15 * torch.ones_like(e)
-        attention = torch.softmax(torch.where(adj > 0, e, inf_matrix), dim=-1)
-        attention = F.dropout(attention, self.dropout, training=self.training)
+        attention = torch.full_like(e, -9e15)
+        attention[adj > 0] = e[adj > 0]
+        attention = torch.softmax(attention, dim=-1)
+
+
+        # inf_matrix = -9e15 * torch.ones_like(e)
+        # attention = torch.softmax(torch.where(adj > 0, e, inf_matrix), dim=-1)
+
+        # attention = F.dropout(attention, self.dropout, training=self.training)
 
         h = torch.mm(attention, h)
         

@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 from metric import compute_accuracy
+from logger_config import logger
 from torch.utils.data import DataLoader
 from graphAttentionNetwork import MultiLayerGAT
 from dataset import KnowledgeGraphDataset, load_data
@@ -15,7 +16,7 @@ from utils import move_to_cuda, save_checkpoint, delete_old_ckt
 
 class KnowledgeGraphTrainer:
     def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, relation_dim, dropout, 
-                 alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
+                 temperature, alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
         self.all_file_path = all_file_path
         self.train_file_path = train_file_path
         self.valid_file_path = valid_file_path
@@ -37,6 +38,8 @@ class KnowledgeGraphTrainer:
         self.valid_dataset = KnowledgeGraphDataset(valid_file_path, self.all_entity2id, self.all_relation2id)
         self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True)
         self.valid_dataloader = DataLoader(self.valid_dataset, batch_size=batch_size, shuffle=True)
+        
+        self.log_inv_t = nn.Parameter(torch.tensor(1.0 / temperature).log())
         
         self.n_entities = len(self.all_entity2id)
         self.n_relations = len(self.all_relation2id)
@@ -87,17 +90,23 @@ class KnowledgeGraphTrainer:
                 tail_emb = nn.functional.normalize(tail_emb, dim=1)
 
                 logits = hr @ tail_emb.T
+
+                logits *= self.log_inv_t.exp()
+
+                # logits = torch.softmax(logits, dim=1)
+
                 target = torch.arange(triples_number).to(self.device)
 
                 loss = self.criterion(logits, target)
                 acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
-                print(f'Epoch: {epoch + 1} | Batch: {batch_index} | Loss:{round(loss.item(), 3)} | Hit@1: {round(acc1.item(), 3)} | Hit@3:{round(acc3.item(), 3)} | Hit@10:{round(acc10.item(), 3)}')
+                logger.info(f'Epoch: {epoch + 1} | Batch: {batch_index} | Inv: {self.log_inv_t.detach().exp()} |Loss:{round(loss.item(), 3)} | Hit@1: {round(acc1.item(), 3)} | Hit@3: {round(acc3.item(), 3)} | Hit@10: {round(acc10.item(), 3)}')
 
                 loss.backward()
                 self.optimizer.step()
-
                 total_loss += loss.item()
-            print(f'Epoch {epoch+1}, Loss: {total_loss/len(self.train_dataloader)}')
+                self.optimizer.zero_grad()
+                
+            logger.info(f'Epoch {epoch+1}, Loss: {total_loss/len(self.train_dataloader)}')
             self.evaluate_save_model(epoch)
 
     @torch.no_grad()
@@ -106,7 +115,7 @@ class KnowledgeGraphTrainer:
         acc1s = 0
         acc3s = 0
         acc10s = 0
-        for _, (adj_matrix, triples) in enumerate(self.train_dataloader):
+        for _, (adj_matrix, triples) in enumerate(self.valid_dataloader):
             if self.device == 'cuda':
                 move_to_cuda(adj_matrix)
                 move_to_cuda(triples)
@@ -152,7 +161,7 @@ class KnowledgeGraphTrainer:
             "Hit@10": acc10s/dataloader_len,
             "loss": total_loss/dataloader_len
         }
-        print(f'Epoch: {epoch+1} \t valid metric:{metric_dict}')
+        logger.info(f'Epoch: {epoch+1} \t valid metric:{metric_dict}')
         return metric_dict
     
     def evaluate_save_model(self, epoch):

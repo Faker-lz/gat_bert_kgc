@@ -78,14 +78,14 @@ def build_adjacency_matrix(triples, entity2id, is_id=False):
     :return: 邻接矩阵
     """
     n_entities = len(entity2id)
-    adj_matrix = torch.zeros((n_entities, n_entities), dtype=torch.float32)
+    adj_matrix = torch.eye(n_entities, dtype=torch.float32)
     for head, _, tail in triples:
         if is_id:
-            adj_matrix[head, tail] = 1.0
+            adj_matrix[tail, head] = 1.0
         else:
             head_id = entity2id[head]
             tail_id = entity2id[tail]
-            adj_matrix[head_id, tail_id] = 1.0
+            adj_matrix[tail_id, head_id] = 1.0
     return adj_matrix
 
 if __name__ == '__main__':
