@@ -5,7 +5,7 @@ Description:
 '''
 import os 
 import torch
-import numpy as np
+from link_graph import LinkGraph
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -28,19 +28,44 @@ class KnowledgeGraphDataset(Dataset):
 class KnowledgeGtaphTestDataset(Dataset):
     def __init__(self, test_data_path, entity2id, relation2id) -> None:
         super().__init__()
-        self.triples = load_data(test_data_path)
+        self.triples = load_data(test_data_path, entity2id=entity2id, relation2id=relation2id)
         self.entity2id = entity2id
         self.relation2id = relation2id
+        self.link_graph = LinkGraph(self.triples)
     
     def __len__(self):
         return len(self.triples)
     
     def __getitem__(self, index):
+
         return self.triples[index]
 
-    def get_triples_and_adj(self):
-        adj_matrix = build_adjacency_matrix(self.triples, self.entity2id, True)
+    def get_test_nodes_adj(self, nodes):
+        # TODO have more effective method?
+        select_triples = list()
+        for head, relation, tail in self.triples:
+            if head in nodes and tail in nodes:
+                select_triples.append((head, relation, tail))
+        adj_matrix = build_adjacency_matrix(select_triples, self.entity2id)
         return self.triples, adj_matrix
+    
+class TailEntityDataset(Dataset):
+    def __init__(self, entities, link_graph):
+        self.entities = entities
+        self.link_graph = link_graph
+
+    def __len__(self):
+        return len(self.entities)
+
+    def __getitem__(self, idx):
+        tail_entity = self.entities[idx]
+        tail_neighbors = self.link_graph.get_neighbors(tail_entity)
+
+        # TODO实现或复用获取adj的方法
+        adj_matrix = self.link_graph.get_test_nodes_adj(tail_neighbors)
+
+        return tail_entity, adj_matrix
+
 
 
 def load_data(filepath, load_all=False, entity2id=None, relation2id=None):
@@ -88,7 +113,7 @@ def build_edge_index(triples, entity2id, is_id=False):
     edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
     return edge_index
 
-def build_adjacency_matrix(triples, entity2id, is_id=False):
+def build_adjacency_matrix(triples, entity2id):
     """
     构建邻接矩阵
     :param triples: 知识图谱三元组列表，每个三元组是(head, relation, tail)
@@ -98,12 +123,7 @@ def build_adjacency_matrix(triples, entity2id, is_id=False):
     n_entities = len(entity2id)
     adj_matrix = torch.eye(n_entities, dtype=torch.float32)
     for head, _, tail in triples:
-        if is_id:
-            adj_matrix[tail, head] = 1.0
-        else:
-            head_id = entity2id[head]
-            tail_id = entity2id[tail]
-            adj_matrix[tail_id, head_id] = 1.0
+        adj_matrix[tail, head] = 1.0
     return adj_matrix
 
 if __name__ == '__main__':

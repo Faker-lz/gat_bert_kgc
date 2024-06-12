@@ -2,11 +2,13 @@ import os
 import torch
 import tqdm
 from typing import List
+from predict import Predictor
 from dataset import load_data
 from logger_config import logger
+from torch.utils.data import DataLoader
 from dataclasses import dataclass, asdict
 from dataset import KnowledgeGtaphTestDataset
-from knowledgeGraphGAT import KnowledgeGraphGAT
+from knowledge_graph_gat import KnowledgeGraphGAT
 
 
 _, entity2id, relation2id = load_data()
@@ -65,31 +67,17 @@ def compute_metrics(hr_tensor: torch.tensor,
 def predict(all_triple_path, test_triple_path, model_path, device):
     # 完成数据导入
     _, all_entity2id, all_relation2id = load_data(all_triple_path, True)
-    model = KnowledgeGraphGAT(3, len(all_entity2id), len(all_relation2id), 768, 32, 128, 768, 0.2, 0.2, 0.05, 3)
 
-    train_args = torch.load(model_path, map_location=lambda storage, loc: storage)
-    model_args = train_args['state_dict']
-    model.load_state_dict(model_args)
-    model.to(device)
-    model.eval()
-    # 运用gat和局部矩阵，获取全部head_emb
-    test_dataset = KnowledgeGtaphTestDataset(test_triple_path)
+    predictor = Predictor()
+    predictor.load(model_path)
 
-    triples, adj = test_dataset.get_triples_and_adj()
+    hr_vectors, tail_vectors, target = predictor.get_hr_embeddings(all_entity2id, 1024, 
+                                                          '/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/test.txt')
 
-    head_id, relation_id, tail_id = triples
+    topk_scores, topk_indices, metrics, ranks = compute_metrics(hr_vectors, tail_vectors, target, all_entity2id)
 
-    hr_emb, _ = model.compute_embedding(head_id, relation_id, tail_id)
+    logger.info(f"Metrics: {metrics}")
 
-    # 分批次用邻居节点计算tail的embedding
-
-    # 将head_emb和关系融合
-
-    # 获得所有entities的embedding
-
-    # 计算metrics
-
-    # 输出计算内容
-
-    return 
+    # 输出预测结果
+    return topk_scores, topk_indices, metrics, ranks
     

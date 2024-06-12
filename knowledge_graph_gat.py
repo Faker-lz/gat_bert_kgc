@@ -5,7 +5,7 @@ Description:
 '''
 import torch
 import torch.nn as nn
-from graphAttentionNetwork import MultiLayerGAT
+from graph_attention_network import MultiLayerGAT
 import torch.nn.functional as F
 
 class KnowledgeGraphGAT(nn.Module):
@@ -29,7 +29,7 @@ class KnowledgeGraphGAT(nn.Module):
         self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim).to(device)
         
     def forward(self, head_id, relation_id, tail_id, adj):
-        hr_emb, tail_emb = self.compute_embedding(head_id, relation_id, tail_id)
+        hr_emb, tail_emb = self.compute_all_embedding(head_id, relation_id, tail_id, adj)
         triples_number = hr_emb.shape[0]
 
         logits = hr_emb @ tail_emb.T
@@ -37,27 +37,42 @@ class KnowledgeGraphGAT(nn.Module):
         target = torch.arange(triples_number).to(self.device)
         return logits, target
 
-    def compute_embedding(self, head_id, relation_id, tail_id):
+    def compute_embedding(self, head_id, relation_id, tail_id, adj, nodes_id=None):
         head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)
         relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
-        tail_id = torch.tensor(tail_id, dtype=torch.long).to(self.device)
 
-        unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
-        x = self.entity_embeddings(unique_entities).to(self.device)
-        
-        sub_adj_matrix = adj[unique_entities][:, unique_entities]
+        if self.gat.training:
+            tail_id = torch.tensor(tail_id, dtype=torch.long).to(self.device)
+            unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
 
-        output = self.gat(x, sub_adj_matrix)
-        
-        head_emb = output[inverse_indices[:len(head_id)]]
-        relation_emb = self.relation_embeddings(relation_id)
-        tail_emb = output[inverse_indices[len(head_id):]]
+            x = self.entity_embeddings(unique_entities).to(self.device)
+            sub_adj_matrix = adj[unique_entities][:, unique_entities]
+            output = self.gat(x, sub_adj_matrix)
 
-        hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
+            head_emb = output[inverse_indices[:len(head_id)]]
+            relation_emb = self.relation_embeddings(relation_id)
+            hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
+            hr_emb = nn.functional.normalize(hr_emb, dim=1)
 
-        hr_emb = nn.functional.normalize(hr_emb, dim=1)
-        tail_emb = nn.functional.normalize(tail_emb, dim=1)
-        return hr_emb, tail_emb
+            tail_emb = output[inverse_indices[len(head_id):]]
+            tail_emb = nn.functional.normalize(tail_emb, dim=1)
+            return hr_emb, tail_emb
+        else:
+            unique_entities, inverse_indices = torch.unique(nodes_id, return_inverse=True)
+
+            x = self.entity_embeddings(unique_entities).to(self.device)
+            sub_adj_matrix = adj[unique_entities][:, unique_entities]
+            output = self.gat(x, sub_adj_matrix)
+
+            head_indices = torch.hstack([torch.where(unique_entities == h)[0] for h in head_id])
+            head_emb = output[head_indices]
+
+            head_emb = output[inverse_indices[:len(head_id)]]
+            relation_emb = self.relation_embeddings(relation_id)
+            hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
+            hr_emb = nn.functional.normalize(hr_emb, dim=1)
+            return hr_emb
+
 
 if __name__ == '__main__':
     n_entities = 1000       # 假设有1000个实体

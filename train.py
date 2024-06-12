@@ -9,7 +9,7 @@ from torch import optim
 from metric import compute_accuracy
 from logger_config import logger
 from torch.utils.data import DataLoader
-from knowledgeGraphGAT import KnowledgeGraphGAT
+from knowledge_graph_gat import KnowledgeGraphGAT
 from dataset import KnowledgeGraphDataset, load_data
 from utils import move_to_cuda, save_checkpoint, delete_old_ckt
 
