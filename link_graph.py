@@ -1,11 +1,15 @@
 
+import torch
 from collections import deque
 from logger_config import logger
+from utils import build_adjacency_matrix
 
 
 class LinkGraph():
-    def __init__(self,triples):
+    def __init__(self,triples,  entities2id):
         self.graph = self.generate_direct_graph(triples)
+        self.entities2id = entities2id
+        self.triples = triples
 
     def generate_direct_graph(self, triples):
         graph = dict()
@@ -19,12 +23,14 @@ class LinkGraph():
         return graph
 
     def get_neighbors(self, node_id, k_step=3):
-        neighbors = set(node_id)
+        neighbors = set()
+        neighbors.add(node_id)
+
         queue = deque()
         if k_step <= 0:
             return neighbors
         
-        queue.append([node_id])
+        queue.append(node_id)
         for _ in range(k_step):
             len_que = len(queue)
             for _ in range(len_que):
@@ -35,5 +41,15 @@ class LinkGraph():
                         queue.append(neig)
         
         return neighbors
+    
+    def get_node_adj(self, nodes):
+        entities_num = len(self.entities2id)
+        adj_matrix = torch.eye(entities_num)
+        select_triples = list()
+        for head, relation, tail in self.triples:
+            if head in nodes and tail in nodes:
+                select_triples.append((head, relation, tail))
+        adj_matrix = build_adjacency_matrix(select_triples, self.entities2id)
+        return adj_matrix
 
 

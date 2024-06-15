@@ -5,3 +5,4 @@ main.py
 *.txt
 split_knowledge_graph.py
 *mdl
+nohup.out

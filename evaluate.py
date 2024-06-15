@@ -11,8 +11,6 @@ from dataset import KnowledgeGtaphTestDataset
 from knowledge_graph_gat import KnowledgeGraphGAT
 
 
-_, entity2id, relation2id = load_data()
-
 @torch.no_grad()
 def compute_metrics(hr_tensor: torch.tensor,
                     tail_tensor: torch.tensor,
@@ -68,11 +66,11 @@ def predict(all_triple_path, test_triple_path, model_path, device):
     # 完成数据导入
     _, all_entity2id, all_relation2id = load_data(all_triple_path, True)
 
-    predictor = Predictor()
-    predictor.load(model_path)
+    predictor = Predictor(device)
+    predictor.load(model_path, all_entity2id, all_relation2id)
 
-    hr_vectors, tail_vectors, target = predictor.get_hr_embeddings(all_entity2id, 1024, 
-                                                          '/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/test.txt')
+    hr_vectors, tail_vectors, target = predictor.get_hr_embeddings(all_entity2id, all_relation2id, 1024, 
+                                                          test_triple_path)
 
     topk_scores, topk_indices, metrics, ranks = compute_metrics(hr_vectors, tail_vectors, target, all_entity2id)
 
@@ -81,3 +79,5 @@ def predict(all_triple_path, test_triple_path, model_path, device):
     # 输出预测结果
     return topk_scores, topk_indices, metrics, ranks
     
+if __name__ == '__main__':
+    print(predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./checkpoint/model_best.mdl', 'cuda'))

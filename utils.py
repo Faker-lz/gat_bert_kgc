@@ -61,3 +61,39 @@ def move_to_cuda(sample):
             return maybe_tensor
 
     return _move_to_cuda(sample)
+
+def build_adjacency_matrix(triples, entity2id):
+    """
+    构建邻接矩阵
+    :param triples: 知识图谱三元组列表，每个三元组是(head, relation, tail)
+    :param entity2id: 实体到ID的映射字典
+    :return: 邻接矩阵
+    """
+    n_entities = len(entity2id)
+    adj_matrix = torch.eye(n_entities, dtype=torch.float32)
+    for head, _, tail in triples:
+        adj_matrix[tail, head] = 1.0
+    return adj_matrix
+
+
+def build_edge_index(triples, entity2id, is_id=False):
+    """
+    构建PyTorch Geometric格式的边索引
+    :param triples: 知识图谱三元组列表，每个三元组是(head, relation, tail)
+    :param entity2id: 实体到ID的映射字典
+    :return: PyTorch Geometric格式的边索引
+    """
+    edges = []
+    for head, _, tail in triples:
+        if not is_id:
+            head_id = entity2id[head]
+            tail_id = entity2id[tail]
+        else:
+            head_id = head
+            tail_id = tail
+        edges.append([head_id, tail_id])
+    
+    edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+    return edge_index
+
+

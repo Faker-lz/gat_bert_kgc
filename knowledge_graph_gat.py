@@ -46,8 +46,8 @@ class KnowledgeGraphGAT(nn.Module):
             unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
 
             x = self.entity_embeddings(unique_entities).to(self.device)
-            sub_adj_matrix = adj[unique_entities][:, unique_entities]
-            output = self.gat(x, sub_adj_matrix)
+            adj = adj[unique_entities][:, unique_entities]
+            output = self.gat(x, adj)
 
             head_emb = output[inverse_indices[:len(head_id)]]
             relation_emb = self.relation_embeddings(relation_id)
@@ -57,21 +57,23 @@ class KnowledgeGraphGAT(nn.Module):
             tail_emb = output[inverse_indices[len(head_id):]]
             tail_emb = nn.functional.normalize(tail_emb, dim=1)
             return hr_emb, tail_emb
-        else:
+        elif task == 'eval_hr':
             unique_entities, inverse_indices = torch.unique(nodes_id, return_inverse=True)
 
             x = self.entity_embeddings(unique_entities).to(self.device)
-            sub_adj_matrix = adj[unique_entities][:, unique_entities]
-            output = self.gat(x, sub_adj_matrix)
+            adj = adj[unique_entities][:, unique_entities]
+            output = self.gat(x, adj)
 
             head_indices = torch.hstack([torch.where(unique_entities == h)[0] for h in head_id])
             head_emb = output[head_indices]
 
-            head_emb = output[inverse_indices[:len(head_id)]]
             relation_emb = self.relation_embeddings(relation_id)
             hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
             hr_emb = nn.functional.normalize(hr_emb, dim=1)
             return hr_emb
+        else:
+            pass
+
 
 
 if __name__ == '__main__':

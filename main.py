@@ -11,7 +11,7 @@ def main():
     trainer = KnowledgeGraphTrainer(
         r'./data/WN18RR/all.txt',
         r'./data/WN18RR/train_graph_parts_50',
-        r'./data/WN18RR/valid_graph_parts_10',
+        r'./data/WN18RR/valid_graph_parts_3',
         r'./checkpoint',
         3,
         768,
@@ -23,7 +23,7 @@ def main():
         3,
         1,
         0.005,
-        2
+        5
     )
     logger.info('start trainning ...')
     trainer.train_epoch()
