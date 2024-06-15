@@ -49,13 +49,12 @@ class TailEntityDataset(Dataset):
 
     def __getitem__(self, idx):
         tail_entity = self.entities[idx]
-        tail_neighbors = self.link_graph.get_neighbors(tail_entity)
+        # tail_neighbors = self.link_graph.get_neighbors(tail_entity)
 
-        # TODO实现或复用获取adj的方法
-        adj_matrix = self.link_graph.get_node_adj(tail_neighbors)
+        # # TODO实现或复用获取adj的方法
+        # adj_matrix = self.link_graph.get_node_adj(tail_neighbors)
 
-        return tail_entity, adj_matrix
-
+        return tail_entity
 
 
 def load_data(filepath, load_all=False, entity2id=None, relation2id=None):

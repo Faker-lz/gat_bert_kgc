@@ -10,9 +10,9 @@ from train import KnowledgeGraphTrainer
 def main():
     trainer = KnowledgeGraphTrainer(
         r'./data/WN18RR/all.txt',
-        r'./data/WN18RR/train_graph_parts_50',
+        r'./data/WN18RR/train_graph_parts_30',
         r'./data/WN18RR/valid_graph_parts_3',
-        r'./checkpoint',
+        r'./checkpoint/dim_768_128_epochs_50_split30/',
         3,
         768,
         128,
@@ -23,7 +23,7 @@ def main():
         3,
         1,
         0.005,
-        5
+        50
     )
     logger.info('start trainning ...')
     trainer.train_epoch()

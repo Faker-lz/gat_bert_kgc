@@ -3,6 +3,7 @@ Author: WLZ
 Date: 2024-06-03 21:11:37
 Description: 
 '''
+import os 
 import torch
 import torch.nn as nn
 from torch import optim
@@ -33,6 +34,9 @@ class KnowledgeGraphTrainer:
         self.num_epochs = num_epochs    
         self.device = device
         self.best_metrics = None
+
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
 
         _, self.all_entity2id, self.all_relation2id = load_data(all_file_path, True)
         self.train_dataset = KnowledgeGraphDataset(train_file_path, self.all_entity2id, self.all_relation2id)

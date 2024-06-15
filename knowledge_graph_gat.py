@@ -38,13 +38,12 @@ class KnowledgeGraphGAT(nn.Module):
         return logits, target
 
     def compute_embedding(self, head_id, relation_id, tail_id, adj, task='training', nodes_id=None):
-        head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)
-        relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
-
         if task == 'training':
+            head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)
+            relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
             tail_id = torch.tensor(tail_id, dtype=torch.long).to(self.device)
+            
             unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
-
             x = self.entity_embeddings(unique_entities).to(self.device)
             adj = adj[unique_entities][:, unique_entities]
             output = self.gat(x, adj)
@@ -58,6 +57,9 @@ class KnowledgeGraphGAT(nn.Module):
             tail_emb = nn.functional.normalize(tail_emb, dim=1)
             return hr_emb, tail_emb
         elif task == 'eval_hr':
+            head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)
+            relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
+
             unique_entities, inverse_indices = torch.unique(nodes_id, return_inverse=True)
 
             x = self.entity_embeddings(unique_entities).to(self.device)
@@ -72,8 +74,15 @@ class KnowledgeGraphGAT(nn.Module):
             hr_emb = nn.functional.normalize(hr_emb, dim=1)
             return hr_emb
         else:
-            pass
+            unique_entities, inverse_indices = torch.unique(nodes_id, return_inverse=True)
 
+            x = self.entity_embeddings(unique_entities).to(self.device)
+            adj = adj[unique_entities][:, unique_entities]
+            output = self.gat(x, adj)
+
+            tail_indices = torch.hstack([torch.where(unique_entities == t)[0] for t in tail_id])
+            tail_emb = nn.functional.normalize(output[tail_indices], dim=1)
+            return tail_emb
 
 
 if __name__ == '__main__':

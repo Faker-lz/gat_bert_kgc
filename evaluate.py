@@ -1,6 +1,8 @@
 import os
 import torch
 import tqdm
+import json
+
 from typing import List
 from predict import Predictor
 from dataset import load_data
@@ -17,22 +19,22 @@ def compute_metrics(hr_tensor: torch.tensor,
                     target: List[int],
                     entity2id: List[int],
                     topk=10,
-                    ):
+                    device='cuda'):
     assert hr_tensor.size(1) == tail_tensor.size(1)
     total = hr_tensor.size(0)
     entity_cnt = len(entity2id)
     assert entity_cnt == tail_tensor.size(0)
-    target = torch.LongTensor(target).unsqueeze(-1).to(hr_tensor.device)
     topk_scores, topk_indices = [], []
     batch_size = hr_tensor.shape[0]
     ranks = []
+    target = target.unsqueeze(-1).expand(-1, entity_cnt)
 
     mean_rank, mrr, hit1, hit3, hit10 = 0, 0, 0, 0, 0
 
     for start in tqdm.tqdm(range(0, total, batch_size)):
         end = start + batch_size
         # batch_size * entity_cnt
-        batch_score = torch.mm(hr_tensor[start:end, :], tail_tensor.t())
+        batch_score = torch.mm(hr_tensor[start:end, :], tail_tensor.t()).to(device)
         assert entity_cnt == batch_score.size(1)
         batch_target = target[start:end]
 
@@ -70,14 +72,19 @@ def predict(all_triple_path, test_triple_path, model_path, device):
     predictor.load(model_path, all_entity2id, all_relation2id)
 
     hr_vectors, tail_vectors, target = predictor.get_hr_embeddings(all_entity2id, all_relation2id, 1024, 
-                                                          test_triple_path)
+                                                          test_triple_path, device)
 
-    topk_scores, topk_indices, metrics, ranks = compute_metrics(hr_vectors, tail_vectors, target, all_entity2id)
+    topk_scores, topk_indices, metrics, ranks = compute_metrics(hr_vectors, tail_vectors, target, all_entity2id, device=device)
 
     logger.info(f"Metrics: {metrics}")
+
+    result_file_path = os.path.join(os.path.dirname(model_path), 'metrics')
+
+    with open(result_file_path,'w') as file:
+        file.write(json.dumps(metrics))
 
     # 输出预测结果
     return topk_scores, topk_indices, metrics, ranks
     
 if __name__ == '__main__':
-    print(predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./checkpoint/model_best.mdl', 'cuda'))
+    predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./checkpoint/model_best.mdl', 'cuda')
