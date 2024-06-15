@@ -11,10 +11,10 @@ from torch.utils.data import Dataset, DataLoader
 
 class KnowledgeGraphDataset(Dataset):
     def __init__(self, graph_part_dir, entity2id, relation2id):
-            self.graph_part_dir = graph_part_dir
-            self.graph_part_files = [os.path.join(graph_part_dir, f) for f in os.listdir(graph_part_dir) if f.endswith('.txt')]
-            self.entity2id = entity2id
-            self.relation2id = relation2id
+        self.graph_part_dir = graph_part_dir
+        self.graph_part_files = [os.path.join(graph_part_dir, f) for f in os.listdir(graph_part_dir) if f.endswith('.txt')]
+        self.entity2id = entity2id
+        self.relation2id = relation2id
 
     def __len__(self):
         return len(self.graph_part_files)
@@ -22,7 +22,7 @@ class KnowledgeGraphDataset(Dataset):
     def __getitem__(self, idx):
         part_file = self.graph_part_files[idx]
         triples = load_data(part_file, entity2id=self.entity2id, relation2id=self.relation2id)
-        adj_matrix = build_adjacency_matrix(triples, self.entity2id, True)
+        adj_matrix = build_adjacency_matrix(triples, self.entity2id)
         return adj_matrix, triples
 
 class KnowledgeGtaphTestDataset(Dataset):

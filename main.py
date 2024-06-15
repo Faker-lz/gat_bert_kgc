@@ -9,10 +9,10 @@ from train import KnowledgeGraphTrainer
 
 def main():
     trainer = KnowledgeGraphTrainer(
-        r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/all.txt',
-        r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/train_graph_parts_20',
-        r'/root/project/wlz/dl/gat_bert_kgc/data/WN18RR/valid_graph_parts_3',
-        r'/root/project/wlz/dl/gat_bert_kgc/checkpoint',
+        r'./data/WN18RR/all.txt',
+        r'./data/WN18RR/train_graph_parts_50',
+        r'./data/WN18RR/valid_graph_parts_10',
+        r'./checkpoint',
         3,
         768,
         128,
@@ -23,7 +23,7 @@ def main():
         3,
         1,
         0.005,
-        50
+        2
     )
     logger.info('start trainning ...')
     trainer.train_epoch()

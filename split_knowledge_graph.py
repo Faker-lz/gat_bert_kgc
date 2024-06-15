@@ -31,6 +31,6 @@ def split_and_save_knowledge_graph(input_file, output_dir, num_parts):
     save_graph_parts(graph_parts, output_dir)
 
 if __name__ == '__main__':
-    split_and_save_knowledge_graph('data/WN18RR/train.txt', 'data/WN18RR/train_graph_parts', num_parts=20)
-    # split_and_save_knowledge_graph(r'data\WN18RR\valid.txt', r'data\WN18RR\valid_graph_parts', num_parts=3)
+    # split_and_save_knowledge_graph('data/WN18RR/train.txt', 'data/WN18RR/train_graph_parts', num_parts=20)
+    split_and_save_knowledge_graph(r'data\WN18RR\valid.txt', r'data\WN18RR\valid_graph_parts', num_parts=10)
 

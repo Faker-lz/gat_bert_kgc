@@ -1,3 +1,4 @@
+import os
 import logging
 
 
@@ -6,9 +7,12 @@ def _setup_logger():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
+    file_handler = logging.FileHandler(os.path.join(os.path.dirname(__file__), 'log/dim_768_128_epochs_2.log'))
+    file_handler.setFormatter(log_format)
+
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(log_format)
-    logger.handlers = [console_handler]
+    logger.handlers = [console_handler, file_handler]
 
     return logger
 

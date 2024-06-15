@@ -1,5 +1,6 @@
 *.pyc
 log/
+logs/
 main.py
 *.txt
 split_knowledge_graph.py
