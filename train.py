@@ -16,7 +16,7 @@ from utils import move_to_cuda, save_checkpoint, delete_old_ckt
 
 
 class KnowledgeGraphTrainer:
-    def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, hid_dim,relation_dim, dropout, 
+    def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, hid_dim, out_dim, relation_dim, dropout, 
                  temperature, alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
         self.all_file_path = all_file_path
         self.train_file_path = train_file_path
@@ -25,6 +25,7 @@ class KnowledgeGraphTrainer:
         self.layers = layers
         self.entity_dim = entity_dim
         self.hid_dim = hid_dim
+        self.out_dim = out_dim
         self.relation_dim = relation_dim
         self.dropout = dropout
         self.alpha = alpha
@@ -48,7 +49,7 @@ class KnowledgeGraphTrainer:
         self.n_relations = len(self.all_relation2id)
         
         self.model = KnowledgeGraphGAT(layers, self.n_entities,self.n_relations, entity_dim, relation_dim, 
-                                       hid_dim, entity_dim, dropout, alpha, temperature, nheads).to(device)
+                                       hid_dim, out_dim, dropout, alpha, temperature, nheads).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.criterion = nn.CrossEntropyLoss().to(device)
 
@@ -101,6 +102,7 @@ class KnowledgeGraphTrainer:
             acc3s += acc3.item()
             acc10s += acc10.item()
             total_loss += loss.item()
+            
         dataloader_len = len(self.valid_dataloader)
         metric_dict = {
             "Hit@1": acc1s/dataloader_len,

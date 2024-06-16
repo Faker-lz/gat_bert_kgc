@@ -6,3 +6,4 @@ main.py
 split_knowledge_graph.py
 *mdl
 nohup.out
+checkpoint/*

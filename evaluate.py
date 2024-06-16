@@ -78,7 +78,7 @@ def predict(all_triple_path, test_triple_path, model_path, device):
 
     logger.info(f"Metrics: {metrics}")
 
-    result_file_path = os.path.join(os.path.dirname(model_path), 'metrics')
+    result_file_path = os.path.join(os.path.dirname(model_path), 'metrics.txt')
 
     with open(result_file_path,'w') as file:
         file.write(json.dumps(metrics))
@@ -87,4 +87,4 @@ def predict(all_triple_path, test_triple_path, model_path, device):
     return topk_scores, topk_indices, metrics, ranks
     
 if __name__ == '__main__':
-    predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./checkpoint/model_best.mdl', 'cuda')
+    predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./checkpoint/dim_768_256_768_epochs_30_split30_layers_4/model_best.mdl', 'cuda')

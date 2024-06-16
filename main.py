@@ -12,10 +12,11 @@ def main():
         r'./data/WN18RR/all.txt',
         r'./data/WN18RR/train_graph_parts_30',
         r'./data/WN18RR/valid_graph_parts_3',
-        r'./checkpoint/dim_768_128_epochs_50_split30/',
-        3,
+        r'./checkpoint/dim_768_128_768_epochs_30_split30_layers_2/',
+        2,
         768,
         128,
+        768,
         32,
         0.2,
         0.05,
@@ -23,7 +24,7 @@ def main():
         3,
         1,
         0.005,
-        50
+        30
     )
     logger.info('start trainning ...')
     trainer.train_epoch()
