@@ -28,8 +28,8 @@ class KnowledgeGraphGAT(nn.Module):
         
         self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim).to(device)
         
-    def forward(self, head_id, relation_id, tail_id, adj):
-        hr_emb, tail_emb = self.compute_embedding(head_id, relation_id, tail_id, adj)
+    def forward(self, head_id, relation_id, tail_id, nodes, adj):
+        hr_emb, tail_emb = self.compute_embedding(head_id, relation_id, tail_id, adj, nodes_id=nodes)
         triples_number = hr_emb.shape[0]
 
         logits = hr_emb @ tail_emb.T
@@ -38,6 +38,7 @@ class KnowledgeGraphGAT(nn.Module):
         return logits, target
 
     def compute_embedding(self, head_id, relation_id, tail_id, adj, task='training', nodes_id=None):
+        adj = adj.to_dense()
         if task == 'training':
             head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)
             relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
