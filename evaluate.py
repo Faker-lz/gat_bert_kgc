@@ -7,10 +7,7 @@ from typing import List
 from predict import Predictor
 from dataset import load_data
 from logger_config import logger
-from torch.utils.data import DataLoader
 from dataclasses import dataclass, asdict
-from dataset import KnowledgeGtaphTestDataset
-from knowledge_graph_gat import KnowledgeGraphGAT
 
 
 @torch.no_grad()
@@ -64,7 +61,7 @@ def compute_metrics(hr_tensor: torch.tensor,
     return topk_scores, topk_indices, metrics, ranks
 
 @torch.no_grad()
-def predict(all_triple_path, test_triple_path, model_path, device):
+def predict(all_triple_path, test_triple_path, train_triple_path, model_path, device):
     # 完成数据导入
     _, all_entity2id, all_relation2id = load_data(all_triple_path, True)
 
@@ -72,13 +69,13 @@ def predict(all_triple_path, test_triple_path, model_path, device):
     predictor.load(model_path, all_entity2id, all_relation2id)
 
     hr_vectors, tail_vectors, target = predictor.get_hr_embeddings(all_entity2id, all_relation2id, 1024, 
-                                                          test_triple_path, device)
+                                                          test_triple_path, train_triple_path, device)
 
     topk_scores, topk_indices, metrics, ranks = compute_metrics(hr_vectors, tail_vectors, target, all_entity2id, device=device)
 
     logger.info(f"Metrics: {metrics}")
 
-    result_file_path = os.path.join(os.path.dirname(model_path), 'metrics.txt')
+    result_file_path = os.path.join(os.path.dirname(model_path), 'metrics_correct_link_graph.txt')
 
     with open(result_file_path,'w') as file:
         file.write(json.dumps(metrics))
@@ -87,4 +84,5 @@ def predict(all_triple_path, test_triple_path, model_path, device):
     return topk_scores, topk_indices, metrics, ranks
     
 if __name__ == '__main__':
-    predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./checkpoint/dim_768_256_768_epochs_30_split30_layers_4/model_best.mdl', 'cuda')
+    predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./data/WN18RR/train.txt',
+            r'./checkpoint/correct_dim_768_128_768_epochs_10_split30_layers_2/model_best.mdl', 'cuda')

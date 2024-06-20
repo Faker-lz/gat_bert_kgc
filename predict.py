@@ -21,7 +21,7 @@ class Predictor:
         # self.train_args.__dict__ = ckt_dict['args']
         # self._setup_args()
         # build_tokenizer(self.train_args)
-        self.model = KnowledgeGraphGAT(4, len(all_entity2id), len(all_relation2id), 768, 32, 256, 768, 0.2, 0.2, 0.05, 3)
+        self.model = KnowledgeGraphGAT(2, len(all_entity2id), len(all_relation2id), 768, 32, 128, 768, 0.2, 0.2, 0.05, 3)
         self.model = self.model.to(self.device)
 
         # DataParallel will introduce 'module.' prefix
@@ -35,10 +35,10 @@ class Predictor:
         self.model.eval()
 
     @torch.no_grad()
-    def get_hr_embeddings(self, all_entities2id, all_relation2id, batch_size, test_data_path, device):
+    def get_hr_embeddings(self, all_entities2id, all_relation2id, batch_size, test_data_path, train_data_path,device):
         hr_emb_list, tail_emb_list, target_list = list(), list(), list()
 
-        test_dataset = KnowledgeGtaphTestDataset(test_data_path, all_entities2id, all_relation2id)
+        test_dataset = KnowledgeGtaphTestDataset(test_data_path, train_data_path, all_entities2id, all_relation2id)
         test_dataloader = DataLoader(test_dataset, batch_size)
 
         logger.info('compute hr embedding ...')
@@ -47,16 +47,16 @@ class Predictor:
 
             nodes = [test_dataset.link_graph.get_neighbors(node.item()) for node in head_id]
             nodes = set.union(*nodes)
-            nodes = torch.LongTensor(list(nodes)).to(self.device)
 
             adj = test_dataset.link_graph.get_node_adj(nodes)
             adj = adj.to(self.device)
+            nodes = torch.LongTensor(list(nodes)).to(self.device)
 
-            hr_emb_list.append(self.model.compute_embedding(head_id, relation_id, tail_id, adj, task='eval_hr',nodes_id=nodes))
+            hr_emb_list.append(self.model.compute_embedding(head_id, relation_id, None, adj, task='eval_hr',nodes_id=nodes))
 
             target_list.append(tail_id)
 
-        # 根据all_entities2id 按照batch_size获取每个tail实体经过GAT融合的embedding，其中也是选取具体的tail的3跳邻居节点作为构造邻接矩阵的依据
+        # 根据all_entities2id 按照batch_size获取每个tail实体经过GAT融合的embedding，其中也是选取具体的tail的n跳邻居节点作为构造邻接矩阵的依据
         tail_entities = list(all_entities2id.values())
         tail_dataset = TailEntityDataset(tail_entities, test_dataset.link_graph)
         tail_dataloader = DataLoader(tail_dataset, batch_size=1024)
@@ -65,7 +65,6 @@ class Predictor:
         tail_emb_list = []
         # 批量处理尾部实体的嵌入计算
         for batch_tails in tqdm.tqdm(tail_dataloader):
-            # TODO 融合在一起计算adj
             nodes = [tail_dataset.link_graph.get_neighbors(tail.item()) for tail in batch_tails]
             nodes = set.union(*nodes)
             nodes = torch.LongTensor(list(nodes)).to(self.device)
@@ -74,5 +73,11 @@ class Predictor:
 
             tail_emb_batch = self.model.compute_embedding(None, None, batch_tails, adj,  'eval_tail', nodes)
             tail_emb_list.append(tail_emb_batch)
-
         return torch.cat(hr_emb_list, dim=0).to(device), torch.cat(tail_emb_list, dim=0).to(device), torch.cat(target_list, dim=0).to(device)
+
+        # tail_emb = self.model.entity_embeddings.weight
+        # tail_emb = torch.nn.functional.normalize(tail_emb, -1)
+
+        # return torch.cat(hr_emb_list, dim=0).to(device), tail_emb.to(device), torch.cat(target_list, dim=0).to(device)
+
+

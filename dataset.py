@@ -10,11 +10,13 @@ from utils import build_adjacency_matrix, build_edge_index
 
 
 class KnowledgeGraphDataset(Dataset):
-    def __init__(self, graph_part_dir, entity2id, relation2id):
+    def __init__(self,graph_part_dir ,all_triple_path , entity2id, relation2id):
         self.graph_part_dir = graph_part_dir
         self.graph_part_files = [os.path.join(graph_part_dir, f) for f in os.listdir(graph_part_dir) if f.endswith('.txt')]
         self.entity2id = entity2id
         self.relation2id = relation2id
+
+        self.link_graph = LinkGraph(load_data(all_triple_path, entity2id=entity2id, relation2id=relation2id), entity2id)
 
     def __len__(self):
         return len(self.graph_part_files)
@@ -22,22 +24,23 @@ class KnowledgeGraphDataset(Dataset):
     def __getitem__(self, idx):
         part_file = self.graph_part_files[idx]
         triples = load_data(part_file, entity2id=self.entity2id, relation2id=self.relation2id)
-        adj_matrix = build_adjacency_matrix(triples, self.entity2id)
-        return adj_matrix, triples
+        return triples
 
 class KnowledgeGtaphTestDataset(Dataset):
-    def __init__(self, test_data_path, entity2id, relation2id) -> None:
+    def __init__(self, test_data_path, train_data_path, entity2id, relation2id) -> None:
         super().__init__()
-        self.triples = load_data(test_data_path, entity2id=entity2id, relation2id=relation2id)
+        self.test_triples = load_data(test_data_path, entity2id=entity2id, relation2id=relation2id)
         self.entity2id = entity2id
         self.relation2id = relation2id
-        self.link_graph = LinkGraph(self.triples ,entity2id)
+
+        # 使用测试集的三元组构造LinkGraph可能会导致泄露,所以这里使用训练集的三元组
+        self.link_graph = LinkGraph(load_data(train_data_path, entity2id=entity2id, relation2id=relation2id), entity2id)
     
     def __len__(self):
-        return len(self.triples)
+        return len(self.test_triples)
     
     def __getitem__(self, index):
-        return self.triples[index]
+        return self.test_triples[index]
     
 class TailEntityDataset(Dataset):
     def __init__(self, entities, link_graph):

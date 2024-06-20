@@ -12,15 +12,18 @@ from logger_config import logger
 from torch.utils.data import DataLoader
 from knowledge_graph_gat import KnowledgeGraphGAT
 from dataset import KnowledgeGraphDataset, load_data
-from utils import move_to_cuda, save_checkpoint, delete_old_ckt
+from utils import move_to_cuda, save_checkpoint, delete_old_ckt, build_adjacency_matrix
 
 
 class KnowledgeGraphTrainer:
-    def __init__(self, all_file_path, train_file_path, valid_file_path, model_dir,layers, entity_dim, hid_dim, out_dim, relation_dim, dropout, 
-                 temperature, alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
+    def __init__(self, all_file_path, train_split_file_path, valid_split_file_path, model_dir,
+                 train_triple_path, valid_triple_path, layers, entity_dim, hid_dim, out_dim, 
+                 relation_dim, dropout, temperature, alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
         self.all_file_path = all_file_path
-        self.train_file_path = train_file_path
-        self.valid_file_path = valid_file_path
+        self.train_split_file_path = train_split_file_path
+        self.valid_split_file_path = valid_split_file_path
+        self.trian_triple_path = train_triple_path
+        self.valid_triple_path = valid_triple_path
         self.model_dir = model_dir
         self.layers = layers
         self.entity_dim = entity_dim
@@ -40,8 +43,8 @@ class KnowledgeGraphTrainer:
             os.makedirs(self.model_dir)
 
         _, self.all_entity2id, self.all_relation2id = load_data(all_file_path, True)
-        self.train_dataset = KnowledgeGraphDataset(train_file_path, self.all_entity2id, self.all_relation2id)
-        self.valid_dataset = KnowledgeGraphDataset(valid_file_path, self.all_entity2id, self.all_relation2id)
+        self.train_dataset = KnowledgeGraphDataset(train_split_file_path, train_triple_path, self.all_entity2id, self.all_relation2id)
+        self.valid_dataset = KnowledgeGraphDataset(valid_split_file_path, valid_triple_path ,self.all_entity2id, self.all_relation2id)
         self.train_dataloader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True)
         self.valid_dataloader = DataLoader(self.valid_dataset, batch_size=batch_size, shuffle=True)
                 
@@ -58,14 +61,22 @@ class KnowledgeGraphTrainer:
         self.model.train()
         for epoch in range(self.num_epochs):
             total_loss = 0
-            for batch_index, (adj_matrix, triples) in enumerate(self.train_dataloader):
+            for batch_index, triples in enumerate(self.train_dataloader):
                 if self.device == 'cuda':
-                    move_to_cuda(adj_matrix)
                     move_to_cuda(triples)
-                
-                adj_matrix = adj_matrix.squeeze().to(self.device)
+
                 head, relation, tail = zip(*triples)
-                logits, target = self.model(head, relation, tail, adj_matrix)
+
+                head_nodes = [self.train_dataset.link_graph.get_neighbors(node) for node in head]
+                tail_nodes = [self.train_dataset.link_graph.get_neighbors(node) for node in tail]
+
+                nodes = set.union(*head_nodes)
+                nodes = nodes.union(*tail_nodes)
+                nodes = torch.LongTensor(list(nodes)).to(self.device)
+
+                adj_matrix = self.train_dataset.link_graph.get_node_adj(nodes).to(self.device)
+
+                logits, target = self.model(head, relation, tail, nodes, adj_matrix)
 
                 loss = self.criterion(logits, target)
                 acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
@@ -86,14 +97,21 @@ class KnowledgeGraphTrainer:
         acc1s = 0
         acc3s = 0
         acc10s = 0
-        for _, (adj_matrix, triples) in enumerate(self.valid_dataloader):
+        for _, triples in enumerate(self.valid_dataloader):
             if self.device == 'cuda':
-                move_to_cuda(adj_matrix)
                 move_to_cuda(triples)
             
-            adj_matrix = adj_matrix.squeeze().to(self.device)
             head, relation, tail = zip(*triples)
-            logits, target = self.model(head, relation, tail, adj_matrix)
+
+            head_nodes = [self.valid_dataset.link_graph.get_neighbors(node) for node in head]
+            tail_nodes = [self.valid_dataset.link_graph.get_neighbors(node) for node in tail]
+
+            nodes = set.union(*head_nodes)
+            nodes = nodes.union(*tail_nodes)
+            nodes = torch.LongTensor(list(nodes)).to(self.device)
+
+            adj_matrix = self.valid_dataset.link_graph.get_node_adj(nodes).to(self.device)
+            logits, target = self.model(head, relation, tail, nodes, adj_matrix)
             
             loss = self.criterion(logits, target)
             acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))

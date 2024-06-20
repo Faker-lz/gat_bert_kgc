@@ -2,11 +2,11 @@
 import torch
 from collections import deque
 from logger_config import logger
-from utils import build_adjacency_matrix
+from utils import build_adjacency_matrix, build_sparse_adjacency_matrix
 
 
 class LinkGraph():
-    def __init__(self,triples,  entities2id):
+    def __init__(self, triples,  entities2id):
         self.graph = self.generate_direct_graph(triples)
         self.entities2id = entities2id
         self.triples = triples
@@ -31,7 +31,7 @@ class LinkGraph():
             return neighbors
         
         queue.append(node_id)
-        for _ in range(k_step):
+        for _ in range(k_step + 1):
             len_que = len(queue)
             for _ in range(len_que):
                 node = queue.popleft()
@@ -39,7 +39,6 @@ class LinkGraph():
                     if neig not in neighbors:
                         neighbors.add(neig)
                         queue.append(neig)
-        
         return neighbors
     
     def get_node_adj(self, nodes):
@@ -48,8 +47,11 @@ class LinkGraph():
         select_triples = list()
         for head, relation, tail in self.triples:
             if head in nodes and tail in nodes:
+                # 既选择了头尾实都命中的三元组，又选择了头或者尾单一命中的三元组，丰富邻接矩阵。
                 select_triples.append((head, relation, tail))
-        adj_matrix = build_adjacency_matrix(select_triples, self.entities2id)
+        # logger.info(f'Get Node num: {len(nodes)}; get triples num: {len(select_triples)}')
+        # adj_matrix = build_adjacency_matrix(select_triples, self.entities2id)
+        adj_matrix = build_sparse_adjacency_matrix(select_triples, self.entities2id)
         return adj_matrix
 
 

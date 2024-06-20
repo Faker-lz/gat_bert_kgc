@@ -44,18 +44,36 @@ class KnowledgeGraphGAT(nn.Module):
             relation_id = torch.tensor(relation_id, dtype=torch.long).to(self.device)
             tail_id = torch.tensor(tail_id, dtype=torch.long).to(self.device)
             
-            unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
+            # unique_entities, inverse_indices = torch.unique(torch.cat([head_id, tail_id]), return_inverse=True)
+            # x = self.entity_embeddings(unique_entities).to(self.device)
+            # adj = adj[unique_entities][:, unique_entities]
+            # output = self.gat(x, adj)
+
+            # head_emb = output[inverse_indices[:len(head_id)]]
+            # relation_emb = self.relation_embeddings(relation_id)
+            # hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
+            # hr_emb = nn.functional.normalize(hr_emb, dim=1)
+
+            # tail_emb = output[inverse_indices[len(head_id):]]
+            # tail_emb = nn.functional.normalize(tail_emb, dim=1)
+
+            unique_entities, inverse_indices = torch.unique(nodes_id, return_inverse=True)
+
             x = self.entity_embeddings(unique_entities).to(self.device)
             adj = adj[unique_entities][:, unique_entities]
             output = self.gat(x, adj)
 
-            head_emb = output[inverse_indices[:len(head_id)]]
+            head_indices = torch.hstack([torch.where(unique_entities == h)[0] for h in head_id])
+            head_emb = output[head_indices]
+
+            tail_indices = torch.hstack([torch.where(unique_entities == t)[0] for t in tail_id])
+            tail_emb = output[tail_indices]
+            tail_emb = nn.functional.normalize(tail_emb)
+
             relation_emb = self.relation_embeddings(relation_id)
             hr_emb = self.fusion_linear(torch.cat([head_emb, relation_emb], dim=1))
             hr_emb = nn.functional.normalize(hr_emb, dim=1)
-
-            tail_emb = output[inverse_indices[len(head_id):]]
-            tail_emb = nn.functional.normalize(tail_emb, dim=1)
+        
             return hr_emb, tail_emb
         elif task == 'eval_hr':
             head_id = torch.tensor(head_id, dtype=torch.long).to(self.device)

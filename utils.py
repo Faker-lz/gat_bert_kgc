@@ -97,3 +97,22 @@ def build_edge_index(triples, entity2id, is_id=False):
     return edge_index
 
 
+def build_sparse_adjacency_matrix(triples, entity2id):
+    """
+    构建稀疏邻接矩阵
+    :param triples: 知识图谱三元组列表，每个三元组是(head, relation, tail)
+    :param entity2id: 实体到ID的映射字典
+    :return: 稀疏邻接矩阵
+    """
+    n_entities = len(entity2id)
+    indices = [(i, i) for i in range(n_entities)]
+    for head, _, tail in triples:
+        indices.append([tail, head])  # tail -> head
+
+    indices = torch.LongTensor(indices).t()  # 转置以符合torch.sparse格式
+    values = torch.FloatTensor([1.0] * (len(triples) + n_entities))  # 权重设为1
+    shape = (n_entities, n_entities)  # 矩阵尺寸
+
+    # 直接创建稀疏矩阵
+    adj_matrix = torch.sparse.FloatTensor(indices, values, torch.Size(shape))
+    return adj_matrix

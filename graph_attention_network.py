@@ -53,7 +53,7 @@ class GraphAttentionLayer(nn.Module):
         # inf_matrix = -9e15 * torch.ones_like(e)
         # attention = torch.softmax(torch.where(adj > 0, e, inf_matrix), dim=-1)
 
-        # attention = F.dropout(attention, self.dropout, training=self.training)
+        attention = F.dropout(attention, self.dropout, training=self.training)
 
         h = torch.mm(attention, h)
         
