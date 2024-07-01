@@ -85,4 +85,4 @@ def predict(all_triple_path, test_triple_path, train_triple_path, model_path, de
     
 if __name__ == '__main__':
     predict(r'./data/WN18RR/all.txt', r'./data/WN18RR/test.txt', r'./data/WN18RR/train.txt',
-            r'./checkpoint/correct_dim_768_128_768_epochs_10_split30_layers_2/model_best.mdl', 'cuda')
+            r'./checkpoint/correct_dim_768_512_256_epochs_5_split20_layers_3/model_best.mdl', 'cuda')

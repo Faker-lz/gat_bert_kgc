@@ -15,6 +15,8 @@ class KnowledgeGraphGAT(nn.Module):
         self.relation_dim = relation_dim
         self.n_entities = n_entities
         self.n_relations = n_relations
+        self.hid_dim = hid_dim
+        self.out_dim = out_dim
         self.n_layers = n_layers
         self.device = device
         self.log_inv_t = nn.Parameter(torch.tensor(1.0 / temperature).log())
@@ -26,7 +28,7 @@ class KnowledgeGraphGAT(nn.Module):
         self.gat = MultiLayerGAT(nlayer=n_layers, nfeat=entity_dim, nhid=hid_dim, 
                                  noutfeat=out_dim, dropout=dropout, alpha=alpha, nheads=nheads).to(device)
         
-        self.fusion_linear = nn.Linear(entity_dim + relation_dim, entity_dim).to(device)
+        self.fusion_linear = nn.Linear(out_dim + relation_dim, out_dim).to(device)
         
     def forward(self, head_id, relation_id, tail_id, nodes, adj):
         hr_emb, tail_emb = self.compute_embedding(head_id, relation_id, tail_id, adj, nodes_id=nodes)

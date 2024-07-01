@@ -21,7 +21,7 @@ class Predictor:
         # self.train_args.__dict__ = ckt_dict['args']
         # self._setup_args()
         # build_tokenizer(self.train_args)
-        self.model = KnowledgeGraphGAT(2, len(all_entity2id), len(all_relation2id), 768, 32, 128, 768, 0.2, 0.2, 0.05, 3)
+        self.model = KnowledgeGraphGAT(3, len(all_entity2id), len(all_relation2id), 768, 32, 512, 256, 0.2, 0.2, 0.05, 3)
         self.model = self.model.to(self.device)
 
         # DataParallel will introduce 'module.' prefix
