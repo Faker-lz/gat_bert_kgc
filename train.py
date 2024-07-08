@@ -5,19 +5,21 @@ Description:
 '''
 import os 
 import torch
+import wandb
 import torch.nn as nn
 from torch import optim
 from metric import compute_accuracy
 from logger_config import logger
 from torch.utils.data import DataLoader
-from knowledge_graph_gat import KnowledgeGraphGAT
+# from knowledge_graph_gat import KnowledgeGraphGAT
+from knowledge_graph_gat_classifier import KnowledgeGraphGATClassifier
 from dataset import KnowledgeGraphDataset, load_data
 from utils import move_to_cuda, save_checkpoint, delete_old_ckt, build_adjacency_matrix
 
 
 class KnowledgeGraphTrainer:
     def __init__(self, all_file_path, train_split_file_path, valid_split_file_path, model_dir,
-                 train_triple_path, valid_triple_path, layers, entity_dim, hid_dim, out_dim, 
+                 train_triple_path, valid_triple_path, layers, entity_dim, hid_dim, out_dim, class_num,
                  relation_dim, dropout, temperature, alpha, nheads, batch_size=1, lr=0.01, num_epochs=10, device='cuda'):
         self.all_file_path = all_file_path
         self.train_split_file_path = train_split_file_path
@@ -29,6 +31,7 @@ class KnowledgeGraphTrainer:
         self.entity_dim = entity_dim
         self.hid_dim = hid_dim
         self.out_dim = out_dim
+        self.class_num = class_num
         self.relation_dim = relation_dim
         self.dropout = dropout
         self.alpha = alpha
@@ -51,8 +54,8 @@ class KnowledgeGraphTrainer:
         self.n_entities = len(self.all_entity2id)
         self.n_relations = len(self.all_relation2id)
         
-        self.model = KnowledgeGraphGAT(layers, self.n_entities,self.n_relations, entity_dim, relation_dim, 
-                                       hid_dim, out_dim, dropout, alpha, temperature, nheads).to(device)
+        self.model = KnowledgeGraphGATClassifier(layers, self.n_entities,self.n_relations, entity_dim, relation_dim, 
+                                       hid_dim, out_dim, class_num ,dropout, alpha, temperature, nheads).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.criterion = nn.CrossEntropyLoss().to(device)
 
@@ -81,6 +84,7 @@ class KnowledgeGraphTrainer:
                 loss = self.criterion(logits, target)
                 acc1, acc3 , acc10 = compute_accuracy(logits, target, topk=(1, 3, 10))
                 logger.info(f'Epoch: {epoch + 1} | Batch: {batch_index} | Loss:{round(loss.item(), 3)} | Hit@1: {round(acc1.item(), 3)} | Hit@3: {round(acc3.item(), 3)} | Hit@10: {round(acc10.item(), 3)}')
+                wandb.log({'Epoch': epoch + 1 , 'Batch': batch_index , 'Loss':round(loss.item(), 3) ,'Hit@1': round(acc1.item(), 3) ,'Hit@3': round(acc3.item(), 3) ,'Hit@10': round(acc10.item(), 3)})
 
                 loss.backward()
                 self.optimizer.step()
@@ -88,6 +92,7 @@ class KnowledgeGraphTrainer:
                 self.optimizer.zero_grad()
                 
             logger.info(f'Epoch {epoch+1}, Loss: {total_loss/len(self.train_dataloader)}')
+            wandb.log({'Epoch': epoch+1, 'Loss': total_loss/len(self.train_dataloader)})
             self.evaluate_save_model(epoch)
 
     @torch.no_grad()
@@ -129,6 +134,7 @@ class KnowledgeGraphTrainer:
             "loss": total_loss/dataloader_len
         }
         logger.info(f'Epoch: {epoch+1} \t valid metric:{metric_dict}')
+        wandb.log({'Epoch': epoch+1 ,'valid metric': metric_dict})
         return metric_dict
     
     def evaluate_save_model(self, epoch):
